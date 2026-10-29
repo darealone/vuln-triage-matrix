@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#080c0f">
+<title>Vulnerability Triage Matrix</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #080c0f;
+  --panel: #0f181c;
+  --panel2: #142227;
+  --inset: #0a1114;
+  --code-bg: #080c0f;
+  --card-a: #132126;
+  --card-b: #0d1518;
+  --ink: #eef4f2;
+  --muted: #9bacaa;
+  --soft: #c3d1ce;
+  --line: #21333a;
+  --line2: #2e464e;
+  --teal: #70c8bc;
+  --tealdim: #70c8bc1c;
+  --amber: #ffc479;
+  --amberdim: #ffc4791c;
+  --red: #ff5f73;
+  --reddim: #ff5f7314;
+  --hover: #70c8bc0b;
+  --track: #ffffff1a;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: Inter, "Avenir Next", system-ui, -apple-system, sans-serif;
+  --r-container: 22px;
+  --r-full: 999px;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f3f7f6; --panel: #ffffff; --panel2: #eaf1ef; --inset: #f7faf9; --code-bg: #eef3f2;
+    --card-a: #ffffff; --card-b: #f6f9f8;
+    --ink: #0f1a1d; --muted: #566765; --soft: #2f403c; --line: #dbe4e1; --line2: #c3d1cd;
+    --teal: #1b7e72; --tealdim: #1b7e7214; --amber: #9a5d00; --amberdim: #9a5d0014;
+    --red: #c3243c; --reddim: #c3243c10; --hover: #1b7e720a; --track: #0000001a;
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f7f6; --panel: #ffffff; --panel2: #eaf1ef; --inset: #f7faf9; --code-bg: #eef3f2;
+  --card-a: #ffffff; --card-b: #f6f9f8;
+  --ink: #0f1a1d; --muted: #566765; --soft: #2f403c; --line: #dbe4e1; --line2: #c3d1cd;
+  --teal: #1b7e72; --tealdim: #1b7e7214; --amber: #9a5d00; --amberdim: #9a5d0014;
+  --red: #c3243c; --reddim: #c3243c10; --hover: #1b7e720a; --track: #0000001a;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.widget-container {
+  width: min(1080px, calc(100% - 32px));
+  margin: 20px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.deck {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-container);
+  background: linear-gradient(155deg, var(--card-a), var(--card-b));
+  box-shadow: 0 18px 48px -36px #000;
+}
+.label { color: var(--muted); font-size: 11px; }
+
+/* Header */
+.header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.header-top h1 { margin: 0; font-size: clamp(1.35rem, 3vw, 1.85rem); line-height: 1.15; letter-spacing: -.04em; }
+.header-top p { margin: 4px 0 0; max-width: 720px; color: var(--muted); font-size: 13px; }
+.asof {
+  padding: 6px 12px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-full);
+  background: var(--panel2);
+  color: var(--teal);
+  font: 11px/1.4 var(--mono);
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+.metrics-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.metric-block {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--inset);
+}
+.metric-value { font: 600 clamp(1.2rem, 3vw, 1.7rem)/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.metric-value.is-alert { color: var(--red); }
+.progress { height: 4px; margin-top: 4px; border-radius: var(--r-full); background: var(--track); overflow: hidden; }
+.progress > span { display: block; height: 100%; width: 0; background: var(--teal); transition: width .3s; }
+
+/* Controls */
+.control-deck { background: var(--panel); }
+.control-row { display: flex; flex-direction: column; gap: 6px; }
+.control-row + .control-row { margin-top: 14px; }
+.chip-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip, .btn {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-full);
+  background: var(--inset);
+  color: var(--soft);
+  font-size: 12px;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+.chip:hover, .btn:hover { border-color: var(--teal); color: var(--ink); }
+.chip[aria-pressed="true"] { border-color: var(--teal); background: var(--tealdim); color: var(--teal); }
+.chip.chip-alert[aria-pressed="true"] { border-color: var(--red); background: var(--reddim); color: var(--red); }
+.btn-small { min-height: 30px; padding: 6px 10px; font-size: 11px; }
+.divider { width: 1px; height: 22px; background: var(--line2); margin: 0 4px; }
+.controls-bottom { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 18px; margin-top: 18px; }
+.slider-head { display: flex; justify-content: space-between; align-items: center; }
+.field-label { color: var(--soft); font-size: 12px; }
+.slider-value { color: var(--teal); font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+.slider {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 10px 0 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: var(--r-full);
+  background: linear-gradient(to right, var(--teal) var(--progress, 0%), var(--track) var(--progress, 0%));
+}
+.slider::-moz-range-track { height: 5px; border-radius: var(--r-full); background: var(--track); }
+.slider::-moz-range-progress { height: 5px; border-radius: var(--r-full); background: var(--teal); }
+.slider::-webkit-slider-thumb {
+  width: 16px; height: 16px; margin-top: -5.5px;
+  appearance: none; -webkit-appearance: none;
+  border: 2px solid var(--bg); border-radius: 50%;
+  background: var(--teal); box-shadow: 0 0 0 1px var(--teal);
+}
+.slider::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid var(--bg); border-radius: 50%; background: var(--teal); }
+.search-wrap { position: relative; }
+.input {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 7px;
+  padding: 9px 40px 9px 12px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: var(--inset);
+}
+.input::placeholder { color: var(--muted); }
+.input:focus-visible { border-color: var(--teal); outline-offset: 1px; }
+.kbd {
+  position: absolute; right: 10px; bottom: 10px;
+  padding: 1px 6px; border: 1px solid var(--line2); border-radius: 5px;
+  color: var(--muted); font: 11px var(--mono); pointer-events: none;
+}
+
+/* List */
+.matrix-container { padding: 16px 18px 18px; }
+.matrix-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 4px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.toolbar-group { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.advisory-item { border-bottom: 1px solid var(--line); }
+.advisory-item:last-child { border-bottom: 0; }
+.advisory-item[hidden] { display: none; }
+.advisory-item.is-mitigated .advisory-row-btn { opacity: .62; }
+.advisory-row-btn {
+  width: 100%;
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1.5fr) minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .15s;
+}
+.advisory-row-btn:hover { background: var(--hover); }
+.cvss-pill {
+  min-width: 42px; min-height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line2); border-radius: 9px;
+  color: var(--soft);
+  font: 600 13px var(--mono); font-variant-numeric: tabular-nums;
+}
+.cvss-pill.is-critical { border-color: var(--red); background: var(--reddim); color: var(--red); }
+.cvss-pill.is-high { border-color: var(--amber); background: var(--amberdim); color: var(--amber); }
+.advisory-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.advisory-title-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 9px; }
+.adv-name { font-weight: 650; }
+.cve-id { color: var(--teal); font: 11px var(--mono); }
+.advisory-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--muted); font-size: 11px; }
+.badge {
+  padding: 1px 7px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r-full);
+  font: 600 10px/1.5 var(--mono);
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge-kev { border-color: var(--red); color: var(--red); background: var(--reddim); }
+.badge-ai { color: var(--muted); }
+.badge[data-s="investigating"] { border-color: var(--amber); color: var(--amber); }
+.badge[data-s="mitigated"] { border-color: var(--teal); color: var(--teal); }
+.advisory-meta-col { min-width: 0; display: flex; justify-content: flex-end; }
+.vector-tag {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  color: var(--muted);
+  font: 10px/1.3 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expand-chevron { display: flex; justify-content: center; color: var(--muted); transition: transform .2s; }
+.expand-chevron::after {
+  width: 8px; height: 8px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  content: "";
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.advisory-item.is-expanded .expand-chevron { transform: rotate(180deg); }
+.advisory-details { display: none; padding: 2px 8px 14px 68px; }
+.advisory-item.is-expanded .advisory-details { display: block; }
+.details-card {
+  display: flex; flex-direction: column; gap: 11px;
+  padding: 16px;
+  border: 1px solid var(--line); border-radius: 16px;
+  background: var(--inset);
+}
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.detail-value { display: block; margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
+.status-select {
+  margin-top: 3px;
+  padding: 5px 8px;
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+}
+.box {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 13px 15px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel);
+}
+.box p { margin: 0; color: var(--soft); font-size: 13px; }
+.box-blind { border-left: 2px solid var(--amber); }
+.box-fix { border-left: 2px solid var(--teal); }
+.box-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.box-fix .box-head .label { color: var(--teal); }
+.cli-row { display: flex; align-items: flex-start; gap: 8px; }
+.cli-command {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--code-bg);
+  color: var(--soft);
+  font: 11px/1.55 var(--mono);
+}
+.refs { margin: 0; padding-left: 18px; font-size: 12px; }
+.refs a { color: var(--teal); overflow-wrap: anywhere; }
+.empty-state { padding: 28px 12px; color: var(--muted); text-align: center; }
+.empty-state p { margin: 0; }
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px);
+  padding: 8px 14px; border: 1px solid var(--line2); border-radius: var(--r-full);
+  background: var(--panel2); color: var(--ink); font-size: 12px;
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+}
+.toast.is-on { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 680px) {
+  .widget-container { width: calc(100% - 32px); margin-block: 12px; gap: 10px; }
+  .deck { padding: 17px; }
+  .matrix-container { padding: 12px; }
+  .metrics-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .controls-bottom { grid-template-columns: 1fr; gap: 12px; }
+  .advisory-row-btn { grid-template-columns: 44px minmax(0, 1fr) 20px; gap: 9px; }
+  .advisory-meta-col { display: none; }
+  .advisory-details { padding-left: 8px; }
+}
+@media (max-width: 520px) {
+  .metric-block { padding: 10px 12px; }
+  .matrix-toolbar { flex-direction: column; align-items: stretch; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .details-card { padding: 12px; }
+  .cli-row { flex-direction: column; }
+  .kbd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="widget-container">
+  <header class="deck">
+    <div class="header-top">
+      <div>
+        <h1 id="page-title">Vulnerability Triage Matrix</h1>
+        <p>Zero-day, CISA KEV, and supply-chain advisories by attack surface, blind spot, and tactical containment. Exploited-in-the-wild items rank first. Every entry links its sources — re-check them before acting, as patch status changes daily.</p>
+      </div>
+      <span class="asof" id="asof"></span>
+    </div>
+    <div class="metrics-strip">
+      <div class="metric-block"><span class="label">Visible advisories</span><span class="metric-value" id="m-visible">–</span></div>
+      <div class="metric-block"><span class="label">Exploited in the wild (in view)</span><span class="metric-value is-alert" id="m-kev">–</span></div>
+      <div class="metric-block"><span class="label">Critical, CVSS ≥ 9.0 (in view)</span><span class="metric-value" id="m-critical">–</span></div>
+      <div class="metric-block">
+        <span class="label">Mitigated (all)</span><span class="metric-value" id="m-done">–</span>
+        <div class="progress" aria-hidden="true"><span id="m-done-bar"></span></div>
+      </div>
+    </div>
+  </header>
+
+  <section class="deck control-deck" aria-label="Filters">
+    <div class="control-row">
+      <span class="label">Filter by attack surface</span>
+      <div class="chip-strip" role="group" aria-label="Attack surface filter" id="vector-chips"></div>
+    </div>
+    <div class="control-row">
+      <span class="label">Exploitation &amp; triage status</span>
+      <div class="chip-strip" role="group" aria-label="Status filters">
+        <button type="button" class="chip chip-alert" id="kev-toggle" aria-pressed="false">Exploited in the wild only</button>
+        <span class="divider" aria-hidden="true"></span>
+        <button type="button" class="chip" data-status-filter="all" aria-pressed="true">All</button>
+        <button type="button" class="chip" data-status-filter="todo" aria-pressed="false">Still to do</button>
+        <button type="button" class="chip" data-status-filter="mitigated" aria-pressed="false">Mitigated</button>
+      </div>
+    </div>
+    <div class="controls-bottom">
+      <div>
+        <div class="slider-head">
+          <label class="field-label" for="cvss-slider">Minimum CVSS score</label>
+          <span class="slider-value" id="cvss-slider-val"></span>
+        </div>
+        <input type="range" id="cvss-slider" class="slider" step="0.1">
+      </div>
+      <div class="search-wrap">
+        <label class="field-label" for="search-input">Search CVE, product, or command</label>
+        <input type="search" id="search-input" class="input" placeholder="e.g. Brotli, MPTCP, docker.sock, ESXi…" autocomplete="off">
+        <span class="kbd" aria-hidden="true">/</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="deck matrix-container" aria-label="Advisories">
+    <div class="matrix-toolbar">
+      <div class="toolbar-group" role="group" aria-label="Sort">
+        <span class="label">Sort:</span>
+        <button type="button" class="chip btn-small" data-sort="priority" aria-pressed="true">Priority</button>
+        <button type="button" class="chip btn-small" data-sort="cvss" aria-pressed="false">CVSS</button>
+        <button type="button" class="chip btn-small" data-sort="name" aria-pressed="false">Name A→Z</button>
+      </div>
+      <div class="toolbar-group">
+        <button type="button" class="btn btn-small" id="expand-all">Expand all</button>
+        <button type="button" class="btn btn-small" id="collapse-all">Collapse all</button>
+        <button type="button" class="btn btn-small" id="reset">Reset filters</button>
+        <button type="button" class="btn btn-small" id="copy-report">Copy report</button>
+        <button type="button" class="btn btn-small" id="download-csv">Download CSV</button>
+      </div>
+    </div>
+
+    <div id="advisory-list"></div>
+
+    <div class="empty-state" id="empty-state" hidden>
+      <p>No advisories match your current filters.</p>
+      <p class="label" style="margin-top:4px">Try lowering the minimum CVSS or pressing “Reset filters”.</p>
+    </div>
+    <p class="sr-only" aria-live="polite" id="live"></p>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ============================================================
+   DATA — edit this array to add/update advisories.
+   Everything else (counts, chips, slider range) is computed.
+   Fields:
+     id, name, cvss, vector, component, status  – shown in the row
+     vector     – attack surface (WHERE it's attacked), not how it was found
+     impact     – what an attacker gets (RCE, DoS, credential theft…)
+     cvssNote   – (optional) when there's no official score or vendors disagree
+     exploited  – true if actively exploited / on CISA KEV
+     aiFound    – true if discovered by an AI model (a source tag, not a vector)
+     blindspot  – what people usually miss
+     action     – plain-language containment step
+     cmd        – (optional) exact command/config, copied verbatim
+     refs       – (optional) source URLs; strongly recommended
+   ============================================================ */
+const DATA_AS_OF = '2026-10-29';
+const ADVISORIES = [
+  {
+    id: 'CVE-2026-98432', name: 'Linux Kernel TCP Remote Root (MPTCP listener)', cvss: 9.8,
+    cvssNote: 'Kernel CNA score. Distros score it lower (Amazon 7.0; others 5.9–8.1).',
+    vector: 'Kernel Network Stack', impact: 'Remote root (RCE)', exploited: false, aiFound: true,
+    component: 'Linux kernel 4.4+ (IPv4 TCP; exploit path needs an MPTCP listener)',
+    status: 'Fixed upstream Oct 15 — Ubuntu, RHEL & Amazon Linux fixes still pending (Oct 29)',
+    blindspot: 'The CVE record describes an IPv4 TCP use-after-free, but the published exploit needs an MPTCP listener. Distros backport fixes under older version numbers, so check your distro\'s tracker, not just uname -r.',
+    action: 'Patch to a fixed kernel as soon as your distro ships one. Until then, disable MPTCP. This blocks the exploit path that was shown, but it is not a full fix for the underlying TCP bug.',
+    cmd: 'uname -r                          # upstream fixed: 5.10.272, 5.15.223, 6.1.190, 6.6.159, 6.12.113, 6.18.56, 7.2.10, 7.3+\nsysctl net.mptcp.enabled          # 1 = exposed\nsudo sysctl -w net.mptcp.enabled=0\necho "net.mptcp.enabled = 0" | sudo tee /etc/sysctl.d/99-disable-mptcp.conf',
+    refs: [
+      'https://ubuntu.com/security/CVE-2026-98432',
+      'https://explore.alas.aws.amazon.com/CVE-2026-98432.html',
+      'https://app.opencve.io/cve/CVE-2026-98432',
+      'https://thehackernews.com/2026/10/anthropics-unreleased-ai-model-chains.html'
+    ]
+  },
+  {
+    id: 'LiteLLM 1.107.0', name: 'LiteLLM PyPI & Docker Credential Stealer + Backdoor', cvss: 9.8,
+    cvssNote: 'No CVE / official score — this is an estimate for a confirmed malicious release.',
+    vector: 'Supply Chain', impact: 'Credential theft + remote code loader', exploited: true, aiFound: false,
+    component: 'litellm 1.107.0 (all 7 wheels) + Docker tags v1.107.0, latest, main-latest, main-stable',
+    status: 'Malicious release published Oct 21 — last safe version is 1.106.2',
+    blindspot: 'The .pth file runs on every Python start on the host, even if litellm is never imported. Running pip install to "fix" it from inside an infected environment re-triggers it. The data was sent to the lookalike domain litellm.dev (the real site is litellm.ai).',
+    action: 'Pin litellm==1.106.2 and rebuild images from a clean base. Do not repair in place. Rotate every secret the host could read (SSH, cloud, CI/CD, LLM keys). Block egress to litellm.dev. Inspect any sitecustomize.py before deleting it: some distros ship a legitimate one.',
+    cmd: "find / -path '*-packages/*' \\( -name cook.pth -o -name cook.py -o -name sitecustomize.py \\) 2>/dev/null\nls -la /tmp/remote_code_loader.lock 2>/dev/null\npip show litellm | grep -i '^version'",
+    refs: [
+      'https://www.stepsecurity.io/blog/litellm-1-107-0-compromised-pypi-backdoored-wheels-credential-stealer',
+      'https://www.wiz.io/blog/litellm-compromised-steals-credentials',
+      'https://safedep.io/litellm-pypi-compromise-credential-stealer-backdoor/'
+    ]
+  },
+  {
+    id: 'Chrome 156 / Safari', name: 'Chrome Sandbox Escape & Safari Same-Origin Bypass Chains', cvss: 9.6,
+    cvssNote: 'Not a single CVE (Chrome alone: 62 CVEs, all rated critical/high) — score is an estimate.',
+    vector: 'Browser', impact: 'Code execution outside sandbox (Chrome); cross-site data theft (Safari)', exploited: false, aiFound: true,
+    component: 'Google Chrome < 156; Apple Safari / WebKit (pre-fix)',
+    status: 'Fixed — Chrome 156 and Apple\'s update; details published Oct 27',
+    blindspot: 'The Safari chain runs no shellcode. It flips a value in memory to switch off the same-origin policy, so exploit-focused detection misses it. The Chrome chain ended in a use-after-free in FedCM (federated sign-in).',
+    action: 'Force-update Chrome to 156+ and install Apple\'s latest Safari/OS update through MDM. Check that managed browsers have actually restarted; an update that is waiting for a relaunch is still unpatched.',
+    cmd: '',
+    refs: [
+      'https://www.anthropic.com/research/discovering-vulnerabilities-with-claude',
+      'https://thehackernews.com/2026/10/anthropics-unreleased-ai-model-chains.html'
+    ]
+  },
+  {
+    id: 'CVE-2026-111497', name: 'Node2Shell / HTTP2Shell (Brotli decoder)', cvss: 9.2,
+    cvssNote: 'Severity varies by vendor: Node.js rates it High, some vendors Critical.',
+    vector: 'Web Runtime & Libraries', impact: 'Remote code execution', exploited: true, aiFound: false,
+    component: 'Google Brotli 1.0.3–1.0.9, 1.1.0, 1.2.0 — embedded in Node.js, Bun, Envoy, Istio, .NET, Python, brotli4j',
+    status: 'CISA KEV Oct 27 (federal deadline Nov 10) — exploitation seen against Node.js',
+    blindspot: 'It triggers whenever your code decompresses attacker-controlled Brotli data. That includes responses your app fetches from other servers, not just inbound requests. WAF rules only cover the inbound side. Node.js 20 and older will get no fix.',
+    action: 'Upgrade Node.js to 22.23.4 / 24.22.1 / 26.12.1, or libbrotli to 1.0.10 / 1.1.1 / 1.2.1, and patch the other runtimes. Stopgap: reject inbound Content-Encoding: br, and stop sending "br" in Accept-Encoding on outbound HTTP clients.',
+    cmd: 'node --version        # need 22.23.4, 24.22.1 or 26.12.1+\npip show brotli brotlicffi 2>/dev/null | grep -E "^(Name|Version)"',
+    refs: [
+      'https://www.rapid7.com/blog/post/etr-cve-2026-111497-critical-out-of-bounds-write-in-the-node-js-brotli-decoder/',
+      'https://aws.amazon.com/security/security-bulletins/2026-155-aws/',
+      'https://github.com/dotnet/runtime/security/advisories/GHSA-p3jp-9v83-76w9',
+      'https://www.aikido.dev/blog/python-packages-vulnerable-node2shell-brotli-cve-2026-111497'
+    ]
+  },
+  {
+    id: 'CVE-2026-109618 / 19', name: 'PHP2Shell (Unauthenticated RCE)', cvss: 9.2,
+    vector: 'Web Runtime & Libraries', impact: 'Remote code execution', exploited: true, aiFound: false,
+    component: 'PHP before 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12 (8.1 and older: no php.net fix)',
+    status: 'CISA KEV Oct 26 (federal deadline Oct 29) — 60k+ exploit attempts tracked',
+    blindspot: 'Apache mod_php is the most exposed setup, and that is what attackers hit (PHP 8.4.26 + mod_php honeypots). The common tip pm.max_requests = 1 only applies to PHP-FPM and does nothing on mod_php.',
+    action: 'Upgrade to 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12, or your distro\'s backport. For PHP 8.1 and older, go to your OS/hosting vendor. The stopgaps below reduce exposure but do not close the bugs.',
+    cmd: '; php.ini, every install (mitigates CVE-2026-109619)\nsession.upload_progress.enabled = Off\n\n; PHP-FPM pool only (www.conf) — big performance cost, no effect on mod_php\npm.max_requests = 1',
+    refs: [
+      'https://thehackernews.com/2026/10/cisa-confirms-active-exploitation-of.html',
+      'https://www.tenable.com/blog/php2shell-cve-2026-109618-cve-2026-109619-frequently-asked-questions-about-critical-php-remote',
+      'https://research.jfrog.com/post/php2shell-all-you-need-to-know-about-cve-2026-109618-and-cve-2026-109619/',
+      'https://aws.amazon.com/blogs/security/using-aws-waf-to-apply-mitigations-for-php2shell-rce-vulnerabilities-cve-2026-109618-and-cve-2026-109619/'
+    ]
+  },
+  {
+    id: 'TS-2026-014 – 017', name: 'Tailworm (Tailscale SSH Socket Forwarding)', cvss: 8.8,
+    cvssNote: 'Tailscale published no CVE or CVSS — score is an estimate.',
+    vector: 'Mesh VPN / Privilege Escalation', impact: 'Privilege escalation to root', exploited: false, aiFound: false,
+    component: 'tailscaled < 1.104.4 with Tailscale SSH enabled',
+    status: 'Fixed in 1.104.4 — bulletins dated Oct 26',
+    blindspot: 'Socket paths were checked by name, but the operations ran as root. A peer your policy already allows to SSH in can use ssh -L / -R to reach root-only sockets (docker.sock, the tailscaled local API) and become root. A race condition also defeated the path allowlist.',
+    action: 'Update every node to 1.104.4+. If you can\'t yet, turn off SSH forwarding with the env flag below and restart tailscaled. Tailscale SSH itself keeps working. Review which peers your policy allows to SSH.',
+    cmd: 'tailscale version     # need 1.104.4+\n# Linux stopgap: add to /etc/default/tailscaled, then restart\nTS_SSH_DISABLE_FORWARDING=1\nsudo systemctl restart tailscaled',
+    refs: [
+      'https://tailscale.com/security-bulletins',
+      'https://tailscale.com/blog/tailscale-ssh-findings-fixes'
+    ]
+  },
+  {
+    id: 'CVE-2026-76418', name: 'Cisco ASA & FTD SSL VPN Crash Zero-Day', cvss: 8.6,
+    vector: 'Network Appliance / VPN', impact: 'Denial of service (device reload)', exploited: true, aiFound: false,
+    component: 'Cisco Secure Firewall ASA & FTD with webvpn + SSL VPN enabled and secondary auth on a tunnel group',
+    status: 'Exploited (confirmed by Cisco PSIRT) — fixed releases out Oct 28',
+    blindspot: 'Only devices with secondary authentication on a tunnel group are vulnerable, so check your config before assuming you are safe or unsafe. This is the second exploited Cisco firewall VPN zero-day since August (after CVE-2026-20349). About 51k ASA SSL VPNs are exposed online.',
+    action: 'Upgrade to a fixed release (Cisco\'s strong recommendation). Interim only: disable secondary authentication on DefaultWEBVPNGroup and any custom tunnel groups.',
+    cmd: 'show running-config webvpn\nshow running-config tunnel-group',
+    refs: [
+      'https://www.bleepingcomputer.com/news/security/cisco-warns-of-firewall-zero-day-exploited-to-crash-ssl-vpn-devices/',
+      'https://www.securityweek.com/attackers-exploit-second-cisco-firewall-vpn-zero-day-since-august/'
+    ]
+  },
+  {
+    id: 'CVE-2026-33096', name: 'Windows HTTP.sys Remote Crash (HTTP/3)', cvss: 7.5,
+    vector: 'Kernel Network Stack', impact: 'Denial of service (BSOD)', exploited: false, aiFound: true,
+    component: 'Windows HTTP.sys (kernel HTTP/3 / QUIC handling)',
+    status: 'Patched Apr 14, 2026 (Patch Tuesday) — exploit details published Oct 27',
+    blindspot: 'It has been patched since April, but the exploit is now public. Any server that has missed six months of updates can be crashed remotely and repeatedly with no login needed.',
+    action: 'Confirm the April 2026 cumulative update or later is installed. Stopgap for hosts you can\'t patch yet: disable HTTP/3 in HTTP.sys, then reboot.',
+    cmd: 'reg add "HKLM\\SYSTEM\\CurrentControlSet\\Services\\HTTP\\Parameters" /v EnableHttp3 /t REG_DWORD /d 0 /f',
+    refs: [
+      'https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-33096',
+      'https://www.anthropic.com/research/discovering-vulnerabilities-with-claude'
+    ]
+  },
+  {
+    id: 'CVE-2026-41709', name: 'VMware ESXi Audit-Log Evasion', cvss: 2.7,
+    vector: 'Hypervisor', impact: 'Hides admin actions from logs (needs admin first)', exploited: true, aiFound: false,
+    component: 'Broadcom VMware ESXi (before the July 29, 2026 fix)',
+    status: 'Fixed Jul 29 — added to CISA KEV Oct 28 (federal deadline Nov 11)',
+    blindspot: 'It scores only 2.7 because an attacker needs admin rights first. But Warp Panda used it as a zero-day to hide what they did. If an ESXi host was compromised before you patched, its own logs may be lying to you.',
+    action: 'Apply Broadcom\'s July 29 fix if it isn\'t installed yet. Audit who has ESXi admin rights. Verify hypervisor activity through outside sources (vCenter, network, storage telemetry) rather than host logs alone.',
+    cmd: 'vmware -vl',
+    refs: [
+      'https://www.cisa.gov/known-exploited-vulnerabilities-catalog',
+      'https://gbhackers.com/cisa-adds-actively-exploited-vmware-esxi-logging-flaw/',
+      'https://sqmagazine.co.uk/vmware-esxi-logging-zero-day-cve-2026-41709/'
+    ]
+  }
+];
+
+const STATUS_LABELS = { open: 'Open', investigating: 'Investigating', mitigated: 'Mitigated' };
+const STORAGE_KEY = 'vtm-triage-status-v1';
+
+// --- Safe storage (works even when localStorage is blocked) ---
+function loadStatuses() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+}
+function saveStatuses() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(statuses)); } catch { /* not persisted */ }
+}
+const statuses = loadStatuses();
+const statusOf = a => statuses[a.id] || 'open';
+
+// --- Slider range comes from the data ---
+const scores = ADVISORIES.map(a => a.cvss);
+const SLIDER_MIN = Math.floor(Math.min(...scores));
+const SLIDER_MAX = Math.max(...scores);
+
+const DEFAULT_STATE = { vector: 'All', minCvss: SLIDER_MIN, query: '', sortBy: 'priority', exploitedOnly: false, statusFilter: 'all' };
+const state = { ...DEFAULT_STATE };
+
+const $ = id => document.getElementById(id);
+const listEl = $('advisory-list');
+
+// --- Small DOM helper: el('span', {class: 'x'}, 'text', childEl) ---
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === false || v == null) continue;
+    if (k === 'class') node.className = v;
+    else node.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children) if (c != null && c !== false) node.append(c);
+  return node;
+}
+
+// --- Build each advisory once; filtering/sorting just reorders and hides ---
+function buildItem(a, index) {
+  const detailsId = 'details-' + index;
+  const pillClass = a.cvss >= 9 ? 'is-critical' : a.cvss >= 7 ? 'is-high' : '';
+  const statusBadge = el('span', { class: 'badge status-badge' });
+
+  const selectId = 'status-' + index;
+  const select = el('select', { class: 'status-select', id: selectId });
+  for (const [value, label] of Object.entries(STATUS_LABELS)) select.append(el('option', { value }, label));
+
+  const rowBtn = el('button', { type: 'button', class: 'advisory-row-btn', 'aria-expanded': 'false', 'aria-controls': detailsId },
+    el('span', { class: 'cvss-pill ' + pillClass, 'aria-label': 'CVSS ' + a.cvss.toFixed(1) }, a.cvss.toFixed(1)),
+    el('div', { class: 'advisory-main' },
+      el('div', { class: 'advisory-title-line' },
+        el('span', { class: 'adv-name' }, a.name),
+        el('span', { class: 'cve-id' }, a.id)),
+      el('div', { class: 'advisory-sub' },
+        a.exploited && el('span', { class: 'badge badge-kev' }, 'Exploited'),
+        a.aiFound && el('span', { class: 'badge badge-ai', title: 'Discovered and exploited by an AI model in research' }, 'AI-found'),
+        statusBadge,
+        el('span', {}, a.component))),
+    el('div', { class: 'advisory-meta-col' }, el('span', { class: 'vector-tag' }, a.vector)),
+    el('span', { class: 'expand-chevron', 'aria-hidden': 'true' }));
+
+  const fixBox = el('div', { class: 'box box-fix' },
+    el('div', { class: 'box-head' },
+      el('span', { class: 'label' }, 'Immediate containment / tactical fix'),
+      el('button', { type: 'button', class: 'btn btn-small', 'data-copy': a.action }, 'Copy action')),
+    el('p', {}, a.action));
+  if (a.cmd) {
+    fixBox.append(el('div', { class: 'cli-row' },
+      el('pre', { class: 'cli-command' }, a.cmd),
+      el('button', { type: 'button', class: 'btn btn-small', 'data-copy': a.cmd }, 'Copy command')));
+  }
+
+  const refs = (a.refs || []).length
+    ? el('div', { class: 'box' }, el('span', { class: 'label' }, 'Sources'),
+        el('ul', { class: 'refs' }, ...a.refs.map(u => el('li', {}, el('a', { href: u, target: '_blank', rel: 'noopener noreferrer', title: u }, new URL(u).hostname.replace(/^www\./, ''))))))
+    : null;
+
+  const details = el('div', { class: 'advisory-details', id: detailsId },
+    el('div', { class: 'details-card' },
+      el('div', { class: 'detail-grid' },
+        el('div', {}, el('span', { class: 'label' }, 'Affected component'), el('span', { class: 'detail-value' }, a.component)),
+        el('div', {}, el('span', { class: 'label' }, 'Advisory status'), el('span', { class: 'detail-value' }, a.status)),
+        el('div', {}, el('span', { class: 'label' }, 'Impact'), el('span', { class: 'detail-value' }, a.impact)),
+        el('div', {}, el('span', { class: 'label' }, 'CVSS ' + a.cvss.toFixed(1)),
+          el('span', { class: 'detail-value' }, a.cvssNote || 'Official base score.')),
+        el('div', {}, el('label', { class: 'label', style: 'display:block', for: selectId }, 'Your triage status'), select)),
+      el('div', { class: 'box box-blind' },
+        el('span', { class: 'label' }, 'Technical blind spot (what people miss)'),
+        el('p', {}, a.blindspot)),
+      fixBox,
+      refs));
+
+  const item = el('div', { class: 'advisory-item' }, rowBtn, details);
+
+  rowBtn.addEventListener('click', () => setExpanded(a, !item.classList.contains('is-expanded')));
+  select.addEventListener('change', () => {
+    if (select.value === 'open') delete statuses[a.id]; else statuses[a.id] = select.value;
+    saveStatuses();
+    updateStatusUI(a);
+    render();
+  });
+
+  a._el = item; a._row = rowBtn; a._badge = statusBadge; a._select = select;
+  a._search = [a.id, a.name, a.vector, a.impact, a.component, a.status, a.blindspot, a.action, a.cmd, a.aiFound ? 'ai-found' : ''].join(' ').toLowerCase();
+  updateStatusUI(a);
+  return item;
+}
+
+function updateStatusUI(a) {
+  const s = statusOf(a);
+  a._badge.dataset.s = s;
+  a._badge.textContent = STATUS_LABELS[s];
+  a._select.value = s;
+  a._el.classList.toggle('is-mitigated', s === 'mitigated');
+}
+
+function setExpanded(a, open) {
+  a._el.classList.toggle('is-expanded', open);
+  a._row.setAttribute('aria-expanded', String(open));
+}
+
+// --- Sorting: priority = not-yet-mitigated, then exploited, then CVSS ---
+const SORTERS = {
+  priority: (x, y) =>
+    (statusOf(x) === 'mitigated') - (statusOf(y) === 'mitigated') ||
+    y.exploited - x.exploited || y.cvss - x.cvss || x.name.localeCompare(y.name),
+  cvss: (x, y) => y.cvss - x.cvss || x.name.localeCompare(y.name),
+  name: (x, y) => x.name.localeCompare(y.name)
+};
+
+function matches(a) {
+  const q = state.query.toLowerCase();
+  const s = statusOf(a);
+  return (state.vector === 'All' || a.vector === state.vector)
+    && a.cvss >= state.minCvss - 1e-9
+    && (!state.exploitedOnly || a.exploited)
+    && (state.statusFilter === 'all' || (state.statusFilter === 'mitigated' ? s === 'mitigated' : s !== 'mitigated'))
+    && (!q || a._search.includes(q));
+}
+
+function visibleSorted() {
+  return ADVISORIES.filter(matches).sort(SORTERS[state.sortBy]);
+}
+
+function render() {
+  const sorted = [...ADVISORIES].sort(SORTERS[state.sortBy]);
+  let visible = 0, kev = 0, critical = 0;
+  for (const a of sorted) {
+    listEl.append(a._el);
+    const show = matches(a);
+    a._el.hidden = !show;
+    if (show) { visible++; if (a.exploited) kev++; if (a.cvss >= 9) critical++; }
+  }
+  const done = ADVISORIES.filter(a => statusOf(a) === 'mitigated').length;
+  $('m-visible').textContent = `${visible} / ${ADVISORIES.length}`;
+  $('m-kev').textContent = kev;
+  $('m-critical').textContent = critical;
+  $('m-done').textContent = `${done} / ${ADVISORIES.length}`;
+  $('m-done-bar').style.width = (done / ADVISORIES.length * 100) + '%';
+  $('empty-state').hidden = visible > 0;
+  $('live').textContent = `${visible} advisories shown`;
+}
+
+// --- Controls ---
+function buildVectorChips() {
+  const counts = {};
+  ADVISORIES.forEach(a => counts[a.vector] = (counts[a.vector] || 0) + 1);
+  const wrap = $('vector-chips');
+  const chip = (v, n) => el('button', { type: 'button', class: 'chip', 'data-vector': v, 'aria-pressed': String(v === state.vector) }, `${v} (${n})`);
+  wrap.append(chip('All', ADVISORIES.length));
+  Object.entries(counts).sort((x, y) => y[1] - x[1]).forEach(([v, n]) => wrap.append(chip(v, n)));
+  wrap.addEventListener('click', e => {
+    const b = e.target.closest('[data-vector]');
+    if (!b) return;
+    state.vector = b.dataset.vector;
+    syncControls(); render();
+  });
+}
+
+const slider = $('cvss-slider');
+slider.min = SLIDER_MIN; slider.max = SLIDER_MAX;
+slider.addEventListener('input', () => { state.minCvss = parseFloat(slider.value); syncControls(); render(); });
+
+const search = $('search-input');
+search.addEventListener('input', () => { state.query = search.value.trim(); render(); });
+
+$('kev-toggle').addEventListener('click', () => { state.exploitedOnly = !state.exploitedOnly; syncControls(); render(); });
+document.querySelectorAll('[data-status-filter]').forEach(b =>
+  b.addEventListener('click', () => { state.statusFilter = b.dataset.statusFilter; syncControls(); render(); }));
+document.querySelectorAll('[data-sort]').forEach(b =>
+  b.addEventListener('click', () => { state.sortBy = b.dataset.sort; syncControls(); render(); }));
+
+$('expand-all').addEventListener('click', () => visibleSorted().forEach(a => setExpanded(a, true)));
+$('collapse-all').addEventListener('click', () => ADVISORIES.forEach(a => setExpanded(a, false)));
+$('reset').addEventListener('click', () => { Object.assign(state, DEFAULT_STATE); syncControls(); render(); });
+
+function syncControls() {
+  document.querySelectorAll('[data-vector]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.vector === state.vector)));
+  document.querySelectorAll('[data-status-filter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.statusFilter === state.statusFilter)));
+  document.querySelectorAll('[data-sort]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sort === state.sortBy)));
+  $('kev-toggle').setAttribute('aria-pressed', String(state.exploitedOnly));
+  slider.value = state.minCvss;
+  slider.style.setProperty('--progress', ((state.minCvss - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN) * 100) + '%');
+  $('cvss-slider-val').textContent = state.minCvss.toFixed(1);
+  if (search.value.trim() !== state.query) search.value = state.query;
+}
+
+// "/" focuses search, Esc clears it
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) {
+    e.preventDefault(); search.focus();
+  } else if (e.key === 'Escape' && document.activeElement === search && search.value) {
+    search.value = ''; state.query = ''; render();
+  }
+});
+
+// --- Clipboard with fallback for file:// and older browsers ---
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = el('textarea', { style: 'position:fixed;opacity:0' });
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { /* ignore */ }
+    ta.remove();
+    return ok;
+  }
+}
+
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('is-on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('is-on'), 1600);
+}
+
+listEl.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-copy]');
+  if (!btn) return;
+  toast(await copyText(btn.dataset.copy) ? 'Copied to clipboard' : 'Copy failed — select the text manually');
+});
+
+// --- Export: Markdown checklist (paste into Slack/Jira/Notion) and CSV ---
+$('copy-report').addEventListener('click', async () => {
+  const rows = visibleSorted();
+  const lines = [`## Vulnerability triage — data as of ${DATA_AS_OF}`, ''];
+  for (const a of rows) {
+    const s = statusOf(a);
+    lines.push(`- [${s === 'mitigated' ? 'x' : ' '}] **${a.name}** (${a.id}) — CVSS ${a.cvss.toFixed(1)} · ${a.impact}${a.exploited ? ' · ⚠️ exploited' : ''} · ${STATUS_LABELS[s]}`);
+    lines.push(`  - Fix: ${a.action}`);
+    if (a.refs?.length) lines.push(`  - Source: ${a.refs[0]}`);
+  }
+  toast(await copyText(lines.join('\n')) ? `Copied report (${rows.length} items)` : 'Copy failed');
+});
+
+$('download-csv').addEventListener('click', () => {
+  // Quote every cell; prefix formula-like cells so Excel won't execute them
+  const cell = v => {
+    let s = String(v ?? '');
+    if (/^[=+\-@]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  };
+  const header = ['ID', 'Name', 'CVSS', 'CVSS note', 'Vector', 'Impact', 'Exploited', 'AI-found', 'Triage status', 'Component', 'Advisory status', 'Blind spot', 'Action', 'Command', 'Sources'];
+  const body = visibleSorted().map(a => [a.id, a.name, a.cvss.toFixed(1), a.cvssNote, a.vector, a.impact, a.exploited ? 'yes' : 'no', a.aiFound ? 'yes' : 'no',
+    STATUS_LABELS[statusOf(a)], a.component, a.status, a.blindspot, a.action, a.cmd, (a.refs || []).join(' ')]);
+  const csv = [header, ...body].map(r => r.map(cell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+  const link = el('a', { href: url, download: `vuln-triage-${DATA_AS_OF}.csv` });
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// --- Init ---
+$('asof').textContent = `${ADVISORIES.length} advisories · as of ${DATA_AS_OF}`;
+ADVISORIES.forEach((a, i) => listEl.append(buildItem(a, i)));
+buildVectorChips();
+syncControls();
+render();
+const first = visibleSorted()[0];
+if (first) setExpanded(first, true);
+
+// --- Embedding support: theme messages + auto-resize for an iframe host ---
+window.addEventListener('message', e => {
+  if (e.data?.type === 'set-theme' || e.data?.type === 'APPLY_THEME') document.documentElement.setAttribute('data-theme', e.data.theme);
+});
+if (window.parent !== window) {
+  const notifyHeight = () => window.parent.postMessage({ type: 'widget-resize', height: Math.ceil(document.documentElement.scrollHeight) }, '*');
+  window.addEventListener('load', () => setTimeout(notifyHeight, 120));
+  new ResizeObserver(notifyHeight).observe(document.body);
+}
+</script>
+</body>
+</html>
